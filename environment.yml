@@ -1,0 +1,9 @@
+name: nf-cleanplex-preprocess
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - bioconda::fastp
+  - bioconda::bwa-mem2=2.1
+  - bioconda::fgbio=1.3.0
