@@ -137,6 +137,47 @@ process FGBIO_TRIM_PRIMERS {
   """
 }
 
+process PRIMER_TRIMMED_BAM_TO_FASTQ {
+  publishDir "${params.outdir}/fastq/primer_trimmed",
+             pattern: "*.fastq.gz",
+             mode: 'copy'
+  input:
+  tuple val(sample), path(bam_and_index)
+
+  output:
+  tuple val(sample), path("*.fastq.gz")
+
+  script:
+  """
+  samtools fastq \\
+    -1 ${sample}_1.fastq.gz \\
+    -2 ${sample}_2.fastq.gz \\
+    ${bam_and_index[0]}
+  """
+}
+
+process CREATE_SAMPLESHEET {
+  publishDir "${params.outdir}/for_viralrecon",
+             mode: 'copy'
+  input:
+  val(samples)
+
+  output:
+  path "samplesheet.csv"
+
+  script:
+  outdir = file(params.outdir)
+  sample_names = samples.join(" ")
+  """
+  echo "sample,fastq_1,fastq_2" > samplesheet.csv
+  for sample in $sample_names; do
+    r1=\$(realpath "$outdir/fastq/primer_trimmed/\${sample}_1.fastq.gz")
+    r2=\$(realpath "$outdir/fastq/primer_trimmed/\${sample}_2.fastq.gz")
+    echo "\$sample,\$r1,\$r2" >> samplesheet.csv
+  done
+  """
+}
+
 
 workflow {
   ch_ref = Channel.fromPath(params.ref_fasta)
@@ -151,6 +192,11 @@ workflow {
   ch_ref | BWA_MEM2_INDEX
 
   ch_trimmed_reads = ch_reads | FASTP 
-  FASTP.out.reads | combine(BWA_MEM2_INDEX.out) | BWA_MEM2_MAP | combine(ch_primers_table) | FGBIO_TRIM_PRIMERS
-  
+  FASTP.out.reads \
+    | combine(BWA_MEM2_INDEX.out) \
+    | BWA_MEM2_MAP \
+    | combine(ch_primers_table) \
+    | FGBIO_TRIM_PRIMERS \
+    | PRIMER_TRIMMED_BAM_TO_FASTQ
+  PRIMER_TRIMMED_BAM_TO_FASTQ.out | map { it[0]} | collect | CREATE_SAMPLESHEET
 }
