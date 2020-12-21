@@ -6,7 +6,7 @@ nextflow.enable.dsl=2
 params.outdir = "results"
 params.reads = "reads/*R{1,2}*.fastq.gz"
 params.help = false
-params.save_trimmed = false
+params.save_fastp_trimmed = false
 params.ref_fasta = "$baseDir/data/MN908947.3.fasta"
 params.primers_table = "$baseDir/data/SARSCoV2.FLEX.primer_info.tab"
 
@@ -45,7 +45,7 @@ process FASTP {
                           else if (filename.endsWith("_fastqc.html")) "fastqc/$filename"
                           else if (filename.endsWith(".zip")) "fastqc/zips/$filename"
                           else if (filename.endsWith(".log")) "log/$filename"
-                          else params.save_trimmed ? filename : null
+                          else params.save_fastp_trimmed ? filename : null
                     },
              mode: 'copy'
 
