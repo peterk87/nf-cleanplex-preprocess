@@ -191,9 +191,12 @@ workflow {
 
   ch_ref | BWA_MEM2_INDEX
 
-  ch_trimmed_reads = ch_reads | FASTP 
-  FASTP.out.reads \
-    | combine(BWA_MEM2_INDEX.out) \
+  if (params.skip_fastp) {
+    ch_reads_ref = ch_reads | combine(BWA_MEM2_INDEX.out)
+  } else {
+    ch_reads_ref = FASTP.out.reads | combine(BWA_MEM2_INDEX.out)
+  }
+  ch_reads_ref \
     | BWA_MEM2_MAP \
     | combine(ch_primers_table) \
     | FGBIO_TRIM_PRIMERS \
