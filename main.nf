@@ -7,8 +7,11 @@ params.outdir = "results"
 params.reads = "reads/*R{1,2}*.fastq.gz"
 params.help = false
 params.save_fastp_trimmed = false
+params.skip_fastp = false
 params.ref_fasta = "$baseDir/data/MN908947.3.fasta"
-params.primers_table = "$baseDir/data/SARSCoV2.FLEX.primer_info.tab"
+params.primers_table = null
+params.run_flex = true
+
 
 def helpMessage() {
     log.info"""
@@ -181,7 +184,15 @@ process CREATE_SAMPLESHEET {
 
 workflow {
   ch_ref = Channel.fromPath(params.ref_fasta)
-  ch_primers_table = Channel.fromPath(params.primers_table)
+  if (params.primers_table) {
+    ch_primers_table = Channel.fromPath(params.primers_table)
+  } else {
+    if (params.run_flex) {
+      ch_primers_table = Channel.fromPath("$baseDir/data/SARSCoV2.FLEX.primer_info.tab")
+    } else {
+      ch_primers_table = Channel.fromPath("$baseDir/data/SARSCoV2.primer_info.tab")
+    }
+  }
 
   ch_reads = Channel.fromFilePairs(
         params.reads,
