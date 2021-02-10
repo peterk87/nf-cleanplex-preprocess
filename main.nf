@@ -10,6 +10,7 @@ params.save_fastp_trimmed = false
 params.skip_fastp = false
 params.ref_fasta = "$baseDir/data/MN908947.3.fasta"
 params.primers_table = null
+params.ivar_trim = false
 params.run_flex = true
 
 
@@ -133,10 +134,54 @@ process FGBIO_TRIM_PRIMERS {
     --sam-validation-stringency=LENIENT \\
     TrimPrimers \\
       -i ${bam[0]} \\
-      -o ${sample}.sorted.trim.bam \\
+      -o ${sample}.sorted.fgbio.trim.bam \\
       -p $primers_table \\
       -H true
-  samtools index ${sample}.sorted.trim.bam
+  samtools index ${sample}.sorted.fgbio.trim.bam
+  """
+}
+
+process CONVERT_PRIMER_TAB_TO_BED {
+  publishDir "${params.outdir}/primers", mode: 'copy'
+
+  input:
+  path(primer_info_tab)
+
+  output:
+  path(bed)
+
+  script:
+  bed = "${file(primer_info_tab).getName()}.bed"
+  """
+  convert_primer_info_tab_to_bed.py $primer_info_tab $bed
+  """
+}
+
+process IVAR_TRIM {
+  label "process_low"
+  publishDir "${params.outdir}/mapping/trimmed",
+             pattern: "*.trim.{bam,bam.bai}",
+             mode: 'copy'
+
+  input:
+  tuple val(sample), path(bam), path(bed)
+
+  output:
+  tuple val(sample), path("*.trim.{bam,bam.bai}")
+
+  script:
+  prefix = "${sample}.ivar.trim"
+  """
+  ivar trim \\
+    -i ${bam[0]} \\
+    -b $bed \\
+    -p trim \\
+    -q 20 \\
+    -m 20 \\
+    -s 4
+  samtools sort -o ${prefix}.bam trim.bam
+  samtools index ${prefix}.bam
+  rm trim.bam
   """
 }
 
@@ -205,12 +250,23 @@ workflow {
   if (params.skip_fastp) {
     ch_reads_ref = ch_reads | combine(BWA_MEM2_INDEX.out)
   } else {
+    FASTP(ch_reads)
     ch_reads_ref = FASTP.out.reads | combine(BWA_MEM2_INDEX.out)
   }
-  ch_reads_ref \
-    | BWA_MEM2_MAP \
-    | combine(ch_primers_table) \
-    | FGBIO_TRIM_PRIMERS \
-    | PRIMER_TRIMMED_BAM_TO_FASTQ
+  if (params.ivar_trim) {
+    CONVERT_PRIMER_TAB_TO_BED(ch_primers_table)
+    ch_reads_ref \
+      | BWA_MEM2_MAP \
+      | combine(CONVERT_PRIMER_TAB_TO_BED.out) \
+      | IVAR_TRIM \
+      | PRIMER_TRIMMED_BAM_TO_FASTQ
+  } else {
+    ch_reads_ref \
+      | BWA_MEM2_MAP \
+      | combine(ch_primers_table) \
+      | FGBIO_TRIM_PRIMERS \
+      | PRIMER_TRIMMED_BAM_TO_FASTQ
+  }
+  
   PRIMER_TRIMMED_BAM_TO_FASTQ.out | map { it[0]} | collect | CREATE_SAMPLESHEET
 }

@@ -7,3 +7,9 @@ dependencies:
   - bioconda::fastp
   - bioconda::bwa-mem2=2.1
   - bioconda::fgbio=1.3.0
+  - bioconda::ivar
+  - conda-forge::pip
+  pip:
+    - typer
+    - rich
+    - pandas
